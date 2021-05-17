@@ -48,24 +48,6 @@ namespace boost { namespace program_options {
     {
     }
     
-    option_description::
-    option_description(const char* name,
-                       const value_semantic* s)
-    : m_value_semantic(s)
-    {
-        this->set_name(name);
-    }
-                                           
-
-    option_description::
-    option_description(const char* name,
-                       const value_semantic* s,
-                       const char* description)
-    : m_description(description), m_value_semantic(s)
-    {
-        this->set_name(name);
-    }
-
     option_description::~option_description()
     {
     }
@@ -232,28 +214,6 @@ namespace boost { namespace program_options {
         // FIXME: does not look exception-safe
         shared_ptr<option_description> d(
             new option_description(name, new untyped_value(true), description));
-
-        owner->add(d);
-        return *this;
-    }
-
-    options_description_easy_init&
-    options_description_easy_init::
-    operator()(const char* name,
-               const value_semantic* s)
-    {
-        shared_ptr<option_description> d(new option_description(name, s));
-        owner->add(d);
-        return *this;
-    }
-
-    options_description_easy_init&
-    options_description_easy_init::
-    operator()(const char* name,
-               const value_semantic* s,
-               const char* description)
-    {
-        shared_ptr<option_description> d(new option_description(name, s, description));
 
         owner->add(d);
         return *this;

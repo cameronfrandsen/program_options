@@ -74,13 +74,21 @@ namespace program_options {
             after \-- short name.
         */
         option_description(const char* name,
-                           const value_semantic* s);
+                           const value_semantic* s)
+        : m_value_semantic(s)
+        {
+          this->set_name(name);
+        }
 
         /** Initializes the class with the passed data. 
          */
         option_description(const char* name,
                            const value_semantic* s,
-                           const char* description);
+                           const char* description)
+        : m_description(description), m_value_semantic(s)
+        {
+          this->set_name(name);
+        }
 
         virtual ~option_description();
 
@@ -151,12 +159,23 @@ namespace program_options {
 
         options_description_easy_init&
         operator()(const char* name,
-                   const value_semantic* s);
+                   const value_semantic* s)
+        {
+          shared_ptr<option_description> d(new option_description(name, s));
+          owner->add(d);
+          return *this;
+        }
         
         options_description_easy_init&
         operator()(const char* name,
                    const value_semantic* s,
-                   const char* description);
+                   const char* description)
+        {
+          shared_ptr<option_description> d(new option_description(name, s, description));
+        
+          owner->add(d);
+          return *this;
+        }
        
     private:
         options_description* owner;
