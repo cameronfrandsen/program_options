@@ -12,6 +12,7 @@
 #include <boost/any.hpp>
 #include <boost/function/function1.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/enable_shared_from_this.hpp>
 
 #include <string>
 #include <vector>
@@ -48,30 +49,30 @@ namespace boost { namespace program_options {
 
         */
         virtual bool is_required() const = 0;
-        
+
         /** Parses a group of tokens that specify a value of option.
             Stores the result in 'value_store', using whatever representation
             is desired. May be be called several times if value of the same
             option is specified more than once.
         */
-        virtual void parse(boost::any& value_store, 
+        virtual void parse(boost::any& value_store,
                            const std::vector<std::string>& new_tokens,
-                           bool utf8) const 
+                           bool utf8) const
             = 0;
 
         /** Called to assign default value to 'value_store'. Returns
             true if default value is assigned, and false if no default
             value exists. */
         virtual bool apply_default(boost::any& value_store) const = 0;
-                                   
-        /** Called when final value of an option is determined. 
+
+        /** Called when final value of an option is determined.
         */
         virtual void notify(const boost::any& value_store) const = 0;
-        
+
         virtual ~value_semantic() {}
     };
 
-    /** Helper class which perform necessary character conversions in the 
+    /** Helper class which perform necessary character conversions in the
         'parse' method and forwards the data further.
     */
     template<class charT>
@@ -87,15 +88,15 @@ namespace boost { namespace program_options {
         or with UTF8->ascii conversion.
     */
     template<>
-    class BOOST_PROGRAM_OPTIONS_DECL 
+    class BOOST_PROGRAM_OPTIONS_DECL
     value_semantic_codecvt_helper<char> : public value_semantic {
     private: // base overrides
-        void parse(boost::any& value_store, 
+        void parse(boost::any& value_store,
                    const std::vector<std::string>& new_tokens,
                    bool utf8) const;
     protected: // interface for derived classes.
-        virtual void xparse(boost::any& value_store, 
-                            const std::vector<std::string>& new_tokens) 
+        virtual void xparse(boost::any& value_store,
+                            const std::vector<std::string>& new_tokens)
             const = 0;
     };
 
@@ -110,20 +111,20 @@ namespace boost { namespace program_options {
     class BOOST_PROGRAM_OPTIONS_DECL
     value_semantic_codecvt_helper<wchar_t> : public value_semantic {
     private: // base overrides
-        void parse(boost::any& value_store, 
+        void parse(boost::any& value_store,
                    const std::vector<std::string>& new_tokens,
                    bool utf8) const;
     protected: // interface for derived classes.
 #if !defined(BOOST_NO_STD_WSTRING)
-        virtual void xparse(boost::any& value_store, 
-                            const std::vector<std::wstring>& new_tokens) 
+        virtual void xparse(boost::any& value_store,
+                            const std::vector<std::wstring>& new_tokens)
             const = 0;
 #endif
     };
 
     /** Class which specifies a simple handling of a value: the value will
-        have string type and only one token is allowed. */    
-    class BOOST_PROGRAM_OPTIONS_DECL 
+        have string type and only one token is allowed. */
+    class BOOST_PROGRAM_OPTIONS_DECL
     untyped_value : public value_semantic_codecvt_helper<char>  {
     public:
         untyped_value(bool zero_tokens = false)
@@ -138,7 +139,7 @@ namespace boost { namespace program_options {
         bool is_composing() const { return false; }
 
         bool is_required() const { return false; }
-        
+
         /** If 'value_store' is already initialized, or new_tokens
             has more than one elements, throws. Otherwise, assigns
             the first string from 'new_tokens' to 'value_store', without
@@ -151,7 +152,7 @@ namespace boost { namespace program_options {
         bool apply_default(boost::any&) const { return false; }
 
         /** Does nothing. */
-        void notify(const boost::any&) const {}        
+        void notify(const boost::any&) const {}
     private:
         bool m_zero_tokens;
     };
@@ -163,7 +164,7 @@ namespace boost { namespace program_options {
         type can be dynamic_cast-ed to typed_value_base. If conversion
         succeeds, the 'type' method can be called.
     */
-    class typed_value_base 
+    class typed_value_base
     {
     public:
         // Returns the type of the value described by this
@@ -178,7 +179,8 @@ namespace boost { namespace program_options {
 
     /** Class which handles value of a specific type. */
     template<class T, class charT = char>
-    class typed_value : public value_semantic_codecvt_helper<charT>
+    class typed_value : public enable_shared_from_this<typed_value<T, charT>>,
+                        public value_semantic_codecvt_helper<charT>
 #ifndef BOOST_NO_RTTI
                       , public typed_value_base
 #endif
@@ -186,21 +188,21 @@ namespace boost { namespace program_options {
     public:
         /** Ctor. The 'store_to' parameter tells where to store
             the value when it's known. The parameter can be NULL. */
-        typed_value(T* store_to) 
+        typed_value(T store_to)
         : m_store_to(store_to), m_composing(false),
           m_implicit(false), m_multitoken(false),
           m_zero_tokens(false), m_required(false)
-        {} 
+        {}
 
         /** Specifies default value, which will be used
             if none is explicitly specified. The type 'T' should
             provide operator<< for ostream.
         */
-        typed_value* default_value(const T& v)
+        shared_ptr<typed_value<T, charT>> default_value(const T& v)
         {
             m_default_value = boost::any(v);
             m_default_value_as_text = boost::lexical_cast<std::string>(v);
-            return this;
+            return shared_from_this();
         }
 
         /** Specifies default value, which will be used
@@ -209,30 +211,30 @@ namespace boost { namespace program_options {
             but textual representation of default value must be provided
             by the user.
         */
-        typed_value* default_value(const T& v, const std::string& textual)
+        shared_ptr<typed_value<T, charT>> default_value(const T& v, const std::string& textual)
         {
             m_default_value = boost::any(v);
             m_default_value_as_text = textual;
-            return this;
+            return shared_from_this();
         }
 
         /** Specifies an implicit value, which will be used
             if the option is given, but without an adjacent value.
             Using this implies that an explicit value is optional,
         */
-        typed_value* implicit_value(const T &v)
+        shared_ptr<typed_value<T, charT>> implicit_value(const T &v)
         {
             m_implicit_value = boost::any(v);
             m_implicit_value_as_text =
                 boost::lexical_cast<std::string>(v);
-            return this;
+            return shared_from_this();
         }
 
         /** Specifies the name used to to the value in help message.  */
-        typed_value* value_name(const std::string& name)
+        shared_ptr<typed_value<T, charT>> value_name(const std::string& name)
         {
             m_value_name = name;
-            return this;
+            return shared_from_this();
         }
 
         /** Specifies an implicit value, which will be used
@@ -245,56 +247,56 @@ namespace boost { namespace program_options {
             operator<< for ostream, but textual representation of default
             value must be provided by the user.
         */
-        typed_value* implicit_value(const T &v, const std::string& textual)
+        shared_ptr<typed_value<T, charT>> implicit_value(const T &v, const std::string& textual)
         {
             m_implicit_value = boost::any(v);
             m_implicit_value_as_text = textual;
-            return this;
+            return shared_from_this();
         }
 
         /** Specifies a function to be called when the final value
             is determined. */
-        typed_value* notifier(function1<void, const T&> f)
+        shared_ptr<typed_value<T, charT>> notifier(function1<void, const T&> f)
         {
             m_notifier = f;
-            return this;
+            return shared_from_this();
         }
 
-        /** Specifies that the value is composing. See the 'is_composing' 
-            method for explanation. 
+        /** Specifies that the value is composing. See the 'is_composing'
+            method for explanation.
         */
-        typed_value* composing()
+        shared_ptr<typed_value<T, charT>> composing()
         {
             m_composing = true;
-            return this;
+            return shared_from_this();
         }
 
-        /** Specifies that the value can span multiple tokens. 
+        /** Specifies that the value can span multiple tokens.
         */
-        typed_value* multitoken()
+        shared_ptr<typed_value<T, charT>> multitoken()
         {
             m_multitoken = true;
-            return this;
+            return shared_from_this();
         }
 
         /** Specifies that no tokens may be provided as the value of
             this option, which means that only presense of the option
             is significant. For such option to be useful, either the
-            'validate' function should be specialized, or the 
+            'validate' function should be specialized, or the
             'implicit_value' method should be also used. In most
             cases, you can use the 'bool_switch' function instead of
             using this method. */
-        typed_value* zero_tokens() 
+        shared_ptr<typed_value<T, charT>> zero_tokens()
         {
             m_zero_tokens = true;
-            return this;
+            return shared_from_this();
         }
-            
+
         /** Specifies that the value must occur. */
-        typed_value* required()
+        shared_ptr<typed_value<T, charT>> required()
         {
             m_required = true;
-            return this;
+            return shared_from_this();
         }
 
     public: // value semantic overrides
@@ -326,11 +328,11 @@ namespace boost { namespace program_options {
 
         /** Creates an instance of the 'validator' class and calls
             its operator() to perform the actual conversion. */
-        void xparse(boost::any& value_store, 
-                    const std::vector< std::basic_string<charT> >& new_tokens) 
+        void xparse(boost::any& value_store,
+                    const std::vector< std::basic_string<charT> >& new_tokens)
             const;
 
-        /** If default value was specified via previous call to 
+        /** If default value was specified via previous call to
             'default_value', stores that value into 'value_store'.
             Returns true if default value was stored.
         */
@@ -350,18 +352,18 @@ namespace boost { namespace program_options {
         void notify(const boost::any& value_store) const;
 
     public: // typed_value_base overrides
-        
+
 #ifndef BOOST_NO_RTTI
         const std::type_info& value_type() const
         {
             return typeid(T);
         }
 #endif
-        
+
 
     private:
         T* m_store_to;
-        
+
         // Default value is stored as boost::any and not
         // as boost::optional to avoid unnecessary instantiations.
         std::string m_value_name;
@@ -377,17 +379,17 @@ namespace boost { namespace program_options {
     /** Creates a typed_value<T> instance. This function is the primary
         method to create value_semantic instance for a specific type, which
         can later be passed to 'option_description' constructor.
-        The second overload is used when it's additionally desired to store the 
+        The second overload is used when it's additionally desired to store the
         value of option into program variable.
     */
     template<class T>
-    typed_value<T>*
+    shared_ptr<typed_value<T>>
     value();
 
-    /** @overload 
+    /** @overload
     */
     template<class T>
-    typed_value<T>*
+    shared_ptr<typed_value<T>>
     value(T* v);
 
     /** Creates a typed_value<T> instance. This function is the primary
@@ -395,25 +397,25 @@ namespace boost { namespace program_options {
         can later be passed to 'option_description' constructor.
     */
     template<class T>
-    typed_value<T, wchar_t>*
+    shared_ptr<typed_value<T, wchar_t>>
     wvalue();
 
-    /** @overload   
+    /** @overload
     */
     template<class T>
-    typed_value<T, wchar_t>*
+    shared_ptr<typed_value<T, wchar_t>>
     wvalue(T* v);
 
     /** Works the same way as the 'value<bool>' function, but the created
-        value_semantic won't accept any explicit value. So, if the option 
+        value_semantic won't accept any explicit value. So, if the option
         is present on the command line, the value will be 'true'.
     */
-    BOOST_PROGRAM_OPTIONS_DECL typed_value<bool>*
+    BOOST_PROGRAM_OPTIONS_DECL shared_ptr<typed_value<bool>>
     bool_switch();
 
     /** @overload
     */
-    BOOST_PROGRAM_OPTIONS_DECL typed_value<bool>*    
+    BOOST_PROGRAM_OPTIONS_DECL shared_ptr<typed_value<bool>>
     bool_switch(bool* v);
 
 }}
